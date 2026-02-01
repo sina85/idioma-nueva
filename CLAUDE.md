@@ -14,7 +14,8 @@ GitHub Repository
        ▼
 GitHub Actions (CI/CD)
        │
-       ├── Build container images
+       ├── Detect changes
+       ├── Build affected container images
        │
        ▼
 Azure Container Registry (ACR)
@@ -23,7 +24,7 @@ Azure Container Registry (ACR)
 Azure Container Apps (Runtime)
 ```
 
-All container-deployable applications follow this path. There is no shared infrastructure beyond the container registry and the Container Apps environment.
+All container-deployable applications follow this path. Only apps with changes (or dependency changes) are built and deployed.
 
 ---
 
@@ -31,77 +32,69 @@ All container-deployable applications follow this path. There is no shared infra
 
 ### Container-Deployable (Azure Container Apps)
 
-| Unit | Path | Description |
-|------|------|-------------|
-| `app` | `apps/app` | Primary Next.js application |
+| Unit | Path | Container App Secret | Description |
+|------|------|---------------------|-------------|
+| `app` | `apps/app` | `AZURE_CONTAINER_APP_NAME` | Primary Next.js application |
+| `docs` | `apps/docs` | `AZURE_CONTAINER_APP_DOCS_NAME` | Documentation site |
 
-This is the only container-deployable unit. It:
+Each container-deployable unit:
+- Has its own Dockerfile
 - Has its own container image
 - Has its own Container App instance
-- Is deployed via GitHub Actions → ACR → Container Apps
-
-### Externally Hosted (Out of CI/CD Scope)
-
-| Unit | Path | Platform | Description |
-|------|------|----------|-------------|
-| `docs` | `apps/docs` | Mintlify | Documentation site |
-
-`apps/docs` is a Mintlify documentation project. It is **not** container-deployable:
-- Deployed via Mintlify's hosted platform
-- Does not produce a container image
-- Does not have a Dockerfile
-- Does not trigger container deployments
-- Changes to `apps/docs` do not affect `app` deployment
+- Is deployed independently based on change detection
 
 ---
 
-## Deployment Triggers
+## Deployment Triggers & Change Detection
 
-A container deployment is triggered when:
-
-1. **Direct changes**: Files within `apps/app/**` change
-2. **Shared package changes**: Any file within `packages/**` changes
-
-A container deployment is **not** triggered when:
-- `apps/docs` changes (externally hosted)
-- External dependencies update (handled at build time, not deployment time)
-- Non-code files change outside deployment scope
+The CI/CD workflow uses smart change detection to determine which apps need deployment:
 
 ### Trigger Matrix
 
-| Change Location | Container Deployment |
-|-----------------|---------------------|
-| `apps/app/**` | ✓ |
-| `packages/**` | ✓ |
-| `apps/docs/**` | ✗ (Mintlify handles) |
-| Root config files | Case-by-case |
+| Change Location | `app` deployed | `docs` deployed |
+|-----------------|----------------|-----------------|
+| `apps/app/**` | ✓ | ✗ |
+| `apps/docs/**` | ✗ | ✓ |
+| `packages/**` | ✓ | ✓ |
+
+### Logic
+
+1. **Direct changes**: If files in `apps/<name>/**` change, that app is deployed
+2. **Shared package changes**: If files in `packages/**` change, ALL apps are deployed (shared dependencies)
+
+This ensures:
+- Apps are only rebuilt when necessary
+- Shared package updates propagate to all dependent apps
+- No unnecessary deployments when unrelated code changes
 
 ---
 
-## Deployment Scope Boundaries
+## Required GitHub Secrets
 
-### In Scope (Container CI/CD)
-- `apps/app` — Next.js application deployed to Azure Container Apps
-- `packages/*` — Shared internal packages (bundled at build time)
-
-### Out of Scope (Externally Managed)
-- `apps/docs` — Mintlify documentation (deployed via Mintlify platform)
-- `docs/` (root) — Standalone documentation project (not in monorepo workspace)
-
-This separation is intentional. Container CI/CD only manages what runs on Azure infrastructure. External platforms manage their own deployment lifecycles.
+| Secret | Description |
+|--------|-------------|
+| `AZURE_CREDENTIALS` | Azure service principal credentials (JSON) |
+| `ACR_NAME` | Azure Container Registry name |
+| `ACR_LOGIN_SERVER` | ACR login server URL |
+| `AZURE_RESOURCE_GROUP` | Azure resource group name |
+| `AZURE_CONTAINER_APP_NAME` | Container App name for `app` |
+| `AZURE_CONTAINER_APP_DOCS_NAME` | Container App name for `docs` |
 
 ---
 
-## Non-Goals
+## Adding a New App
 
-The CI/CD system intentionally does **not**:
+To add a new container-deployable app:
 
-- **Infer dependency graphs dynamically** — Deployment triggers are explicit, not computed from import analysis or lockfile diffs
-- **Deploy all apps on every commit** — Only affected paths trigger deployment
-- **Use Turborepo for deployment orchestration** — Turborepo handles build caching and task ordering; GitHub Actions handles deployment decisions
-- **Manage Mintlify deployments** — Documentation is deployed via Mintlify's platform
-- **Implement blue-green or canary deployments** — Deployments are rolling updates to Container Apps
-- **Auto-rollback on failure** — Failed deployments require manual intervention or explicit rollback workflows
+1. Create the app in `apps/<name>/`
+2. Add a `Dockerfile` in `apps/<name>/Dockerfile`
+3. Update `.github/workflows/deploy.yml`:
+   - Add path to `on.push.paths`
+   - Add change detection output in `detect` job
+   - Add new `deploy-<name>` job
+   - Update `summary` job
+4. Add `AZURE_CONTAINER_APP_<NAME>_NAME` secret in GitHub
+5. Create the Container App in Azure
 
 ---
 
@@ -115,23 +108,6 @@ The CI/CD system intentionally does **not**:
 | **Docker** | Container image builds |
 | **Azure Container Registry** | Image storage and versioning |
 | **Azure Container Apps** | Runtime execution, scaling, ingress |
-| **Mintlify** | Documentation hosting (external, not managed by this CI/CD) |
-
----
-
-## Glossary
-
-### Deployable Unit (Container)
-A self-contained application that produces a container image and runs as an independent service on Azure Container Apps. In this repository: `app` only.
-
-### Externally Hosted Unit
-An application or site deployed via a third-party platform outside the container CI/CD pipeline. In this repository: `docs` (Mintlify).
-
-### Shared Package
-An internal package in `packages/*` consumed by deployable units. Changes to shared packages trigger redeployment of all container-deployable apps. Shared packages are bundled into the consuming app's container at build time.
-
-### Change Detection
-The process of determining which deployable units are affected by a given commit or PR. Implemented via path-based filtering in GitHub Actions. Change detection is explicit and declarative, not inferred from code analysis.
 
 ---
 
@@ -144,8 +120,6 @@ The process of determining which deployable units are affected by a given commit
 3. **One container per app** — Each container-deployable unit produces exactly one container image. No sidecar patterns or multi-container pods.
 
 4. **Environment parity** — The same container image is promoted through environments (staging → production). Configuration differences are handled via environment variables.
-
-5. **External platforms are not managed** — Mintlify and other external hosting platforms are out of scope for this CI/CD system.
 
 ---
 

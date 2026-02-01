@@ -1,0 +1,177 @@
+# =============================================================================
+# Deploy to Azure Container Apps
+# Smart change detection: only deploys apps that have changed or have changed dependencies
+# =============================================================================
+
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/app/**"
+      - "apps/docs/**"
+      - "packages/**"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Detect: Determine which apps need to be deployed
+  # ---------------------------------------------------------------------------
+  detect:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      deploy_app: ${{ steps.check.outputs.deploy_app }}
+      deploy_docs: ${{ steps.check.outputs.deploy_docs }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check for relevant changes
+        id: check
+        run: |
+          # Get changed files between HEAD and previous commit
+          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+
+          # Check if packages changed (affects all apps)
+          PACKAGES_CHANGED=false
+          if echo "$CHANGED_FILES" | grep -qE '^packages/'; then
+            PACKAGES_CHANGED=true
+            echo "Packages changed - all apps will be deployed"
+          fi
+
+          # Check if app needs deployment
+          if [ "$PACKAGES_CHANGED" = true ] || echo "$CHANGED_FILES" | grep -qE '^apps/app/'; then
+            echo "deploy_app=true" >> $GITHUB_OUTPUT
+            echo "Will deploy: app"
+          else
+            echo "deploy_app=false" >> $GITHUB_OUTPUT
+            echo "Skip deploy: app (no changes)"
+          fi
+
+          # Check if docs needs deployment
+          if [ "$PACKAGES_CHANGED" = true ] || echo "$CHANGED_FILES" | grep -qE '^apps/docs/'; then
+            echo "deploy_docs=true" >> $GITHUB_OUTPUT
+            echo "Will deploy: docs"
+          else
+            echo "deploy_docs=false" >> $GITHUB_OUTPUT
+            echo "Skip deploy: docs (no changes)"
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Build & Deploy: app
+  # ---------------------------------------------------------------------------
+  deploy-app:
+    name: Deploy app
+    runs-on: ubuntu-latest
+    needs: detect
+    if: needs.detect.outputs.deploy_app == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set image metadata
+        id: meta
+        run: |
+          IMAGE_NAME_TAG="app:${{ github.sha }}"
+          echo "image_name_tag=$IMAGE_NAME_TAG" >> $GITHUB_OUTPUT
+          echo "Image: $IMAGE_NAME_TAG"
+
+      - name: Log in to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Log in to ACR
+        run: az acr login --name ${{ secrets.ACR_NAME }}
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            -f apps/app/Dockerfile \
+            -t ${{ secrets.ACR_LOGIN_SERVER }}/${{ steps.meta.outputs.image_name_tag }} \
+            .
+
+      - name: Push Docker image to ACR
+        run: docker push ${{ secrets.ACR_LOGIN_SERVER }}/${{ steps.meta.outputs.image_name_tag }}
+
+      - name: Deploy to Azure Container Apps
+        run: |
+          az containerapp update \
+            --name ${{ secrets.AZURE_CONTAINER_APP_NAME }} \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+            --image ${{ secrets.ACR_LOGIN_SERVER }}/${{ steps.meta.outputs.image_name_tag }}
+
+      - name: Deployment summary
+        run: |
+          echo "✓ Deployed app"
+          echo "  Image: ${{ steps.meta.outputs.image_name_tag }}"
+
+  # ---------------------------------------------------------------------------
+  # Build & Deploy: docs
+  # ---------------------------------------------------------------------------
+  deploy-docs:
+    name: Deploy docs
+    runs-on: ubuntu-latest
+    needs: detect
+    if: needs.detect.outputs.deploy_docs == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set image metadata
+        id: meta
+        run: |
+          IMAGE_NAME_TAG="docs:${{ github.sha }}"
+          echo "image_name_tag=$IMAGE_NAME_TAG" >> $GITHUB_OUTPUT
+          echo "Image: $IMAGE_NAME_TAG"
+
+      - name: Log in to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Log in to ACR
+        run: az acr login --name ${{ secrets.ACR_NAME }}
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            -f apps/docs/Dockerfile \
+            -t ${{ secrets.ACR_LOGIN_SERVER }}/${{ steps.meta.outputs.image_name_tag }} \
+            .
+
+      - name: Push Docker image to ACR
+        run: docker push ${{ secrets.ACR_LOGIN_SERVER }}/${{ steps.meta.outputs.image_name_tag }}
+
+      - name: Deploy to Azure Container Apps
+        run: |
+          az containerapp update \
+            --name ${{ secrets.AZURE_CONTAINER_APP_DOCS_NAME }} \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+            --image ${{ secrets.ACR_LOGIN_SERVER }}/${{ steps.meta.outputs.image_name_tag }}
+
+      - name: Deployment summary
+        run: |
+          echo "✓ Deployed docs"
+          echo "  Image: ${{ steps.meta.outputs.image_name_tag }}"
+
+  # ---------------------------------------------------------------------------
+  # Summary: Report what was deployed
+  # ---------------------------------------------------------------------------
+  summary:
+    name: Deployment Summary
+    runs-on: ubuntu-latest
+    needs: [detect, deploy-app, deploy-docs]
+    if: always()
+    steps:
+      - name: Summary
+        run: |
+          echo "=== Deployment Summary ==="
+          echo "app: ${{ needs.detect.outputs.deploy_app == 'true' && (needs.deploy-app.result == 'success' && '✓ deployed' || '✗ failed') || '- skipped' }}"
+          echo "docs: ${{ needs.detect.outputs.deploy_docs == 'true' && (needs.deploy-docs.result == 'success' && '✓ deployed' || '✗ failed') || '- skipped' }}"
