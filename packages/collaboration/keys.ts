@@ -9,4 +9,5 @@ export const keys = () =>
     runtimeEnv: {
       LIVEBLOCKS_SECRET: process.env.LIVEBLOCKS_SECRET,
     },
+    skipValidation: !!process.env.SKIP_ENV_VALIDATION,
   });

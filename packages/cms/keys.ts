@@ -9,4 +9,5 @@ export const keys = () =>
     runtimeEnv: {
       BASEHUB_TOKEN: process.env.BASEHUB_TOKEN,
     },
+    skipValidation: !!process.env.SKIP_ENV_VALIDATION,
   });

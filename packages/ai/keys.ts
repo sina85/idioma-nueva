@@ -9,4 +9,5 @@ export const keys = () =>
     runtimeEnv: {
       OPENAI_API_KEY: process.env.OPENAI_API_KEY,
     },
+    skipValidation: !!process.env.SKIP_ENV_VALIDATION,
   });

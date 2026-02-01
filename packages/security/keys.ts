@@ -9,4 +9,5 @@ export const keys = () =>
     runtimeEnv: {
       ARCJET_KEY: process.env.ARCJET_KEY,
     },
+    skipValidation: !!process.env.SKIP_ENV_VALIDATION,
   });
