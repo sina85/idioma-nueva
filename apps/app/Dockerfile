@@ -77,7 +77,11 @@ COPY packages ./packages
 RUN SKIP_ENV_VALIDATION=1 pnpm --filter @repo/database exec prisma generate
 
 # Build the app using Turborepo (handles internal package dependencies)
-RUN SKIP_ENV_VALIDATION=1 pnpm turbo build --filter=app
+# Provide placeholder URLs for build-time static generation (replaced at runtime)
+RUN SKIP_ENV_VALIDATION=1 \
+    NEXT_PUBLIC_APP_URL=http://localhost:3000 \
+    NEXT_PUBLIC_WEB_URL=http://localhost:3000 \
+    pnpm turbo build --filter=app
 
 # -----------------------------------------------------------------------------
 # Stage 4: runner
