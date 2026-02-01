@@ -1,0 +1,49 @@
+name: Trigger auto deployment for sina-doc
+
+# When this action will be executed
+on:
+  # Automatically trigger it when detected changes in repo
+  push:
+    branches: 
+      [ main ]
+    paths:
+    - '**'
+    - '.github/workflows/sina-doc-AutoDeployTrigger-240655a1-20e3-45e9-9478-16967d21e627.yml'
+
+  # Allow manual trigger 
+  workflow_dispatch:      
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions: 
+      id-token: write #This is required for requesting the OIDC JWT Token
+      contents: read #Required when GH token is used to authenticate with private repo
+
+    steps:
+      - name: Checkout to the branch
+        uses: actions/checkout@v2
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.SINADOC_AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.SINADOC_AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.SINADOC_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build and push container image to registry
+        uses: azure/container-apps-deploy-action@v2
+        with:
+          appSourcePath: ${{ github.workspace }}
+          _dockerfilePathKey_: _dockerfilePath_
+          _targetLabelKey_: _targetLabel_
+          registryUrl: grdddev.azurecr.io
+          registryUsername: ${{ secrets.SINADOC_REGISTRY_USERNAME }}
+          registryPassword: ${{ secrets.SINADOC_REGISTRY_PASSWORD }}
+          containerAppName: sina-doc
+          resourceGroup: dev-grp
+          imageToBuild: grdddev.azurecr.io/sina-doc:${{ github.sha }}
+          _buildArgumentsKey_: |
+            _buildArgumentsValues_
+
+
