@@ -4,8 +4,6 @@ import OpenAI from 'openai';
 import { promises as fs } from 'fs';
 import path from 'path';
 
-const openai = new OpenAI();
-
 const VOICES_DIR = path.join(process.cwd(), 'public', 'voices');
 const ENGLISH_VOICE = 'nova';
 const SPANISH_VOICE = 'nova';
@@ -15,6 +13,8 @@ export async function POST(request: NextRequest) {
   if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  const openai = new OpenAI();
 
   try {
     const { wordId, english, spanish } = await request.json();
