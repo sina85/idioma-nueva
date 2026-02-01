@@ -1,10 +1,12 @@
 import { createMetadata } from "@repo/seo/metadata";
 import type { Metadata } from "next";
-import dynamic from "next/dynamic";
+import nextDynamic from "next/dynamic";
+
+export const dynamic = "force-dynamic";
 
 const title = "Reset Password";
 const description = "Enter your new password.";
-const ResetPassword = dynamic(() =>
+const ResetPassword = nextDynamic(() =>
   import("@repo/auth/components/reset-password").then((mod) => mod.ResetPassword)
 );
 

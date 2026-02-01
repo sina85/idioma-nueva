@@ -16,36 +16,25 @@ export const ResetPassword = () => {
   const supabase = createClient();
 
   useEffect(() => {
-    // Check if we have a valid recovery session from the URL hash
     const checkSession = async () => {
-      // The hash contains the access_token from Supabase recovery link
       const hash = window.location.hash;
-      console.log("Hash:", hash);
 
       if (hash && hash.includes("access_token") && hash.includes("type=recovery")) {
-        // Parse the hash fragment to extract tokens
         const hashParams = new URLSearchParams(hash.substring(1));
         const accessToken = hashParams.get("access_token");
         const refreshToken = hashParams.get("refresh_token");
 
-        console.log("Access token found:", !!accessToken);
-        console.log("Refresh token found:", !!refreshToken);
-
         if (accessToken && refreshToken) {
-          // Manually set the session using the tokens from the URL
           const { data, error: sessionError } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken,
           });
 
-          console.log("setSession result:", { data, error: sessionError });
-
           if (sessionError || !data.session) {
             setIsValidSession(false);
-            setError(`Invalid or expired recovery link: ${sessionError?.message || "No session created"}`);
+            setError("Invalid or expired recovery link. Please request a new password reset.");
           } else {
             setIsValidSession(true);
-            // Clear the hash from the URL for cleaner appearance
             window.history.replaceState(null, "", window.location.pathname);
           }
         } else {
@@ -53,9 +42,7 @@ export const ResetPassword = () => {
           setError("Invalid recovery link. Missing required tokens.");
         }
       } else {
-        // No recovery token in URL - check if user came here directly with a session
         const { data: { session } } = await supabase.auth.getSession();
-        console.log("Existing session check:", session);
         if (session) {
           setIsValidSession(true);
         } else {
