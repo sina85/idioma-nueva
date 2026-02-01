@@ -73,10 +73,11 @@ COPY apps/app ./apps/app
 COPY packages ./packages
 
 # Generate Prisma client (required before build)
-RUN pnpm --filter @repo/database exec prisma generate || true
+# SKIP_ENV_VALIDATION=1 bypasses env var checks during build (validated at runtime)
+RUN SKIP_ENV_VALIDATION=1 pnpm --filter @repo/database exec prisma generate
 
 # Build the app using Turborepo (handles internal package dependencies)
-RUN pnpm turbo build --filter=app
+RUN SKIP_ENV_VALIDATION=1 pnpm turbo build --filter=app
 
 # -----------------------------------------------------------------------------
 # Stage 4: runner
