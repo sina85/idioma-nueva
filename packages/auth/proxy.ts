@@ -38,7 +38,7 @@ export const authMiddleware = async (request: NextRequest) => {
   // Redirect to sign-in if accessing protected route without authentication
   if (!user && request.nextUrl.pathname.startsWith("/")) {
     // Skip auth check for public routes
-    const publicPaths = ["/sign-in", "/sign-up", "/api/auth"];
+    const publicPaths = ["/sign-in", "/sign-up", "/api/auth", "/forgot-password", "/reset-password"];
     const isPublicPath = publicPaths.some((path) =>
       request.nextUrl.pathname.startsWith(path)
     );
