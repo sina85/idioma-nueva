@@ -31,7 +31,6 @@ COPY apps/app/package.json ./apps/app/
 COPY packages/ai/package.json ./packages/ai/
 COPY packages/analytics/package.json ./packages/analytics/
 COPY packages/auth/package.json ./packages/auth/
-COPY packages/cms/package.json ./packages/cms/
 COPY packages/collaboration/package.json ./packages/collaboration/
 COPY packages/database/package.json ./packages/database/
 COPY packages/design-system/package.json ./packages/design-system/
