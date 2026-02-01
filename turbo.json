@@ -9,9 +9,7 @@
       "outputs": [
         ".next/**",
         "!.next/cache/**",
-        "**/generated/**",
-        "storybook-static/**",
-        ".react-email/**"
+        "**/generated/**"
       ]
     },
     "test": {

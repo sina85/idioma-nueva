@@ -11,21 +11,21 @@ export const send = async (eventType: string, payload: object) => {
   }
 
   const svix = new Svix(svixToken);
-  const { orgId } = await auth();
+  const { userId } = await auth();
 
-  if (!orgId) {
+  if (!userId) {
     return;
   }
 
-  return svix.message.create(orgId, {
+  return svix.message.create(userId, {
     eventType,
     payload: {
       eventType,
       ...payload,
     },
     application: {
-      name: orgId,
-      uid: orgId,
+      name: userId,
+      uid: userId,
     },
   });
 };
@@ -36,16 +36,16 @@ export const getAppPortal = async () => {
   }
 
   const svix = new Svix(svixToken);
-  const { orgId } = await auth();
+  const { userId } = await auth();
 
-  if (!orgId) {
+  if (!userId) {
     return;
   }
 
-  return svix.authentication.appPortalAccess(orgId, {
+  return svix.authentication.appPortalAccess(userId, {
     application: {
-      name: orgId,
-      uid: orgId,
+      name: userId,
+      uid: userId,
     },
   });
 };

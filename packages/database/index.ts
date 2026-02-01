@@ -1,18 +1,20 @@
 import "server-only";
 
-import { neonConfig } from "@neondatabase/serverless";
-import { PrismaNeon } from "@prisma/adapter-neon";
-import ws from "ws";
 import { PrismaClient } from "./generated/client";
-import { keys } from "./keys";
+import type { PrismaClient as PrismaClientType } from "./generated/client";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { Pool } from "pg";
 
-const globalForPrisma = global as unknown as { prisma: PrismaClient };
+const globalForPrisma = global as unknown as { prisma: PrismaClientType };
 
-neonConfig.webSocketConstructor = ws;
+function createPrismaClient() {
+  const connectionString = process.env.DATABASE_URL;
+  const pool = new Pool({ connectionString });
+  const adapter = new PrismaPg(pool);
+  return new PrismaClient({ adapter });
+}
 
-const adapter = new PrismaNeon({ connectionString: keys().DATABASE_URL });
-
-export const database = globalForPrisma.prisma || new PrismaClient({ adapter });
+export const database = globalForPrisma.prisma || createPrismaClient();
 
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = database;

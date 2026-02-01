@@ -1,4 +1,4 @@
-import { auth } from "@repo/auth/server";
+import { currentUser } from "@repo/auth/server";
 import { database } from "@repo/database";
 import { notFound, redirect } from "next/navigation";
 import { Header } from "../components/header";
@@ -21,36 +21,56 @@ export const generateMetadata = async ({
 };
 
 const SearchPage = async ({ searchParams }: SearchPageProperties) => {
-  const { q } = await searchParams;
-  const pages = await database.page.findMany({
-    where: {
-      name: {
-        contains: q,
-      },
-    },
-  });
-  const { orgId } = await auth();
+  const user = await currentUser();
 
-  if (!orgId) {
+  if (!user) {
     notFound();
   }
+
+  const { q } = await searchParams;
 
   if (!q) {
     redirect("/");
   }
 
+  const words = await database.word.findMany({
+    where: {
+      userId: user.id,
+      OR: [
+        {
+          english: {
+            contains: q,
+            mode: 'insensitive',
+          },
+        },
+        {
+          spanish: {
+            contains: q,
+            mode: 'insensitive',
+          },
+        },
+      ],
+    },
+    take: 50,
+  });
+
   return (
     <>
-      <Header page="Search" pages={["Building Your Application"]} />
+      <Header page="Search" pages={["Vocabulary"]} />
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         <div className="grid auto-rows-min gap-4 md:grid-cols-3">
-          {pages.map((page) => (
-            <div className="aspect-video rounded-xl bg-muted/50" key={page.id}>
-              {page.name}
+          {words.map((word) => (
+            <div className="aspect-video rounded-xl bg-muted/50 p-4" key={word.id}>
+              <div className="font-semibold">{word.english}</div>
+              <div className="text-muted-foreground">{word.spanish}</div>
             </div>
           ))}
         </div>
-        <div className="min-h-[100vh] flex-1 rounded-xl bg-muted/50 md:min-h-min" />
+        {words.length === 0 && (
+          <div className="flex items-center justify-center min-h-[50vh] text-muted-foreground">
+            No words found matching "{q}"
+          </div>
+        )}
       </div>
     </>
   );

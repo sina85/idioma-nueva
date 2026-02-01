@@ -1,23 +1,8 @@
 "use server";
 
-import {
-  auth,
-  clerkClient,
-  type OrganizationMembership,
-} from "@repo/auth/server";
+import { currentUser } from "@repo/auth/server";
+import { database } from "@repo/database";
 import Fuse from "fuse.js";
-
-const getName = (user: OrganizationMembership): string | undefined => {
-  let name = user.publicUserData?.firstName;
-
-  if (name && user.publicUserData?.lastName) {
-    name = `${name} ${user.publicUserData.lastName}`;
-  } else if (!name) {
-    name = user.publicUserData?.identifier;
-  }
-
-  return name;
-};
 
 export const searchUsers = async (
   query: string
@@ -30,26 +15,22 @@ export const searchUsers = async (
     }
 > => {
   try {
-    const { orgId } = await auth();
+    const user = await currentUser();
 
-    if (!orgId) {
+    if (!user) {
       throw new Error("Not logged in");
     }
 
-    const clerk = await clerkClient();
-
-    const members = await clerk.organizations.getOrganizationMembershipList({
-      organizationId: orgId,
-      limit: 100,
+    const users = await database.user.findMany({
+      take: 100,
     });
 
-    const users = members.data.map((user) => ({
+    const searchableUsers = users.map((user) => ({
       id: user.id,
-      name: getName(user) ?? user.publicUserData?.identifier,
-      imageUrl: user.publicUserData?.imageUrl,
+      name: user.name ?? user.email,
     }));
 
-    const fuse = new Fuse(users, {
+    const fuse = new Fuse(searchableUsers, {
       keys: ["name"],
       minMatchCharLength: 1,
       threshold: 0.3,

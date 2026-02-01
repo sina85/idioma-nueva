@@ -7,13 +7,116 @@ generator client {
 }
 
 datasource db {
-  provider     = "postgresql"
-  relationMode = "prisma"
+  provider = "postgresql"
 }
 
-// This is a stub model.
-// Delete it and add your own Prisma models.
-model Page {
-  id   Int    @id @default(autoincrement())
-  name String
+// User profile synced from Supabase Auth
+model User {
+  id        String   @id // Supabase auth.uid()
+  email     String   @unique
+  name      String?
+  role      UserRole @default(STUDENT)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  words     Word[]
+  groups    Group[]
+  wordStats WordStat[]
+  quizzes   Quiz[]
+
+  @@map("users")
+}
+
+enum UserRole {
+  ADMIN
+  TEACHER
+  STUDENT
+}
+
+model Word {
+  id        String   @id @default(cuid())
+  english   String
+  spanish   String
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  groups  GroupWord[]
+  stats   WordStat?
+  results QuizResult[]
+
+  @@index([userId])
+  @@map("words")
+}
+
+model Group {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  words GroupWord[]
+
+  @@index([userId])
+  @@map("groups")
+}
+
+model GroupWord {
+  groupId String
+  wordId  String
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  word  Word  @relation(fields: [wordId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, wordId])
+  @@index([groupId])
+  @@index([wordId])
+  @@map("group_words")
+}
+
+model WordStat {
+  wordId    String @id
+  seen      Int    @default(0)
+  correct   Int    @default(0)
+  incorrect Int    @default(0)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  word   Word   @relation(fields: [wordId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([wordId])
+  @@map("word_stats")
+}
+
+model Quiz {
+  id        Int      @id @default(autoincrement())
+  date      DateTime @default(now())
+  direction String // 'en-to-es' | 'es-to-en' | 'alternating'
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  results QuizResult[]
+
+  @@index([userId])
+  @@map("quizzes")
+}
+
+model QuizResult {
+  id       Int     @id @default(autoincrement())
+  quizId   Int
+  wordId   String
+  correct  Boolean
+  attempts Int
+
+  quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  word Word @relation(fields: [wordId], references: [id], onDelete: Cascade)
+
+  @@index([quizId])
+  @@index([wordId])
+  @@map("quiz_results")
 }
